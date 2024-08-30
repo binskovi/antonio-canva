@@ -162,3 +162,152 @@ Konwencja plików
 * [file].js/.jsx/.tsx: Dynamiczny segment trasy.
 * [...file].js/.jsx/.tsx: Segment trasy obejmujący wszystkie dopasowania.
 * [[...file]].js/.jsx/.tsx: Opcjonalny segment trasy obejmujący wszystkie dopasowania.
+
+## Setting up Fabric.js
+
+https://github.com/fabricjs/fabric.js
+
+instalacja, nie wszystkie nowe wersje współpracują prawidłowo stąd konkretna isntalacja.
+```
+bun add fabric@5.3.0-browser
+bun add -D @types/fabric@5.3.0
+```
+### 1. page.tsx
+```
+import { Editor } from "@/features/editor/components/editor";
+
+const EditorProjectIdPage = () => {
+  return (
+    <Editor />
+  );
+};
+
+export default EditorProjectIdPage;
+```
+Opis:
+* EditorProjectIdPage: Jest to komponent strony, która w Next.js pełni rolę strony dla danego URL. W tym przypadku, komponent ten renderuje jedynie komponent Editor, co sugeruje, że ta strona jest dedykowana do pracy z edytorem Canvas.
+
+### 2. use-editors.ts
+```
+import { fabric } from "fabric";
+import { useCallback } from "react";
+
+export const useEditor = () => {
+  const init = useCallback(
+    ({
+      initialCanvas,
+      initialContainer,
+    }: {
+      initialCanvas: fabric.Canvas;
+      initialContainer: HTMLDivElement;
+    }) => {
+      fabric.Object.prototype.set({
+        cornerColor: "#FFF",
+        cornerStyle: "circle",
+        borderColor: "#3b82f6",
+        borderScaleFactor: 1.5,
+        transparentCorners: false,
+        borderOpacityWhenMoving: 1,
+        cornerStrokeColor: "#3b82f6",
+      });
+
+      const initialWorkspace = new fabric.Rect({
+        width: 900,
+        height: 1200,
+        name: "clip",
+        fill: "white",
+        selectable: false,
+        hasControls: false,
+        shadow: new fabric.Shadow({
+          color: "rgba(0,0,0,0.8)",
+          blur: 5,
+        }),
+      });
+
+      initialCanvas.setWidth(initialContainer.offsetWidth);
+      initialCanvas.setHeight(initialContainer.offsetHeight);
+
+      initialCanvas.add(initialWorkspace);
+      initialCanvas.centerObject(initialWorkspace);
+      initialCanvas.clipPath = initialWorkspace;
+
+      const test = new fabric.Rect({
+        width: 100,
+        height: 100,
+        fill: "black",
+      });
+
+      initialCanvas.add(test);
+      initialCanvas.centerObject(test);
+    },
+    []
+  );
+
+  return { init };
+};
+
+```
+Opis:
+
+* useEditor: Jest to customowy hook Reacta, który dostarcza funkcję init, odpowiedzialną za inicjalizację Canvas i ustawienia początkowe.
+* useCallback: Używane, aby zapewnić, że funkcja init nie zostanie ponownie zdefiniowana przy każdym renderowaniu, co jest istotne z punktu widzenia wydajności. Zwraca ona funkcję inicjalizującą init, która przyjmuje dwa parametry: initialCanvas (obiekt fabric.Canvas) oraz initialContainer (kontener HTML dla Canvas).
+
+Wewnątrz funkcji init:
+* Konfiguracja obiektów Fabric.js: Modyfikuje domyślne ustawienia wszystkich obiektów na Canvas (np. styl narożników, kolory obramowania).
+* Tworzenie initialWorkspace: Tworzy nowy prostokąt, który pełni rolę głównego obszaru roboczego na Canvas, z cieniowaniem i innymi ustawieniami wizualnymi.
+* Inicjalizacja rozmiaru Canvas: Ustawia rozmiar Canvas na podstawie rozmiaru kontenera, w którym jest osadzony.
+* Dodanie initialWorkspace do Canvas: Dodaje initialWorkspace do Canvas i centrowanie go.
+* Ustawienie ClipPath: Ustawia obszar roboczy jako ClipPath, co oznacza, że inne elementy będą widoczne tylko wewnątrz tego prostokąta.
+* Dodanie test: Dodaje przykładowy czarny prostokąt jako element testowy do Canvas.
+
+Funkcjonalność:
+Hook useEditor zapewnia funkcję inicjalizującą, która przygotowuje Canvas do użytku, ustawiając odpowiednie wymiary, stylizacje oraz dodając początkowe elementy. Jest to kluczowe do dynamicznego renderowania i manipulowania obiektami na Canvas.
+
+### 3. editor.tsx
+```
+"use client";
+
+import { fabric } from "fabric";
+import { useEffect, useRef } from "react";
+import { useEditor } from "@/features/editor/hooks/use-editor";
+
+export const Editor = () => {
+  const { init } = useEditor();
+
+  const canvasRef = useRef(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const canvas = new fabric.Canvas(canvasRef.current, {
+      controlsAboveOverlay: true,
+      preserveObjectStacking: true,
+    });
+
+    init({
+      initialCanvas: canvas,
+      initialContainer: containerRef.current!,
+    });
+  }, [init]);
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex-1 h-full bg-muted" ref={containerRef}>
+        <canvas ref={canvasRef} />
+      </div>
+    </div>
+  );
+};
+
+```
+Opis:
+
+* "use client": Jest to dyrektywa w Next.js, która oznacza, że ten plik działa po stronie klienta (czyli w przeglądarce). Jest to konieczne, ponieważ Fabric.js działa tylko w przeglądarce.
+* useRef: Używane do referencji do elementów DOM (tu: <canvas> i jego kontener), co jest niezbędne do pracy z Fabric.js, ponieważ musimy przekazać rzeczywiste elementy DOM do inicjalizacji Canvas.
+* useEffect: Używane do inicjalizacji Canvas, gdy komponent jest montowany.
+  - Tworzy nowy obiekt fabric.Canvas i przekazuje referencję do elementu Canvas.
+  - Wywołuje funkcję init z hooka useEditor, przekazując nowo utworzony obiekt Canvas oraz referencję do kontenera.
+* JSX: Struktura JSX definiuje wygląd komponentu Editor. Mamy kontener <div>, który zajmuje całą dostępną wysokość (h-full), a w nim umieszczone jest <canvas>, które jest miejscem pracy Fabric.js.
+
+Funkcjonalność:
+
+Komponent Editor odpowiada za montowanie Canvas w DOM i jego inicjalizację za pomocą hooka useEditor. Cała logika inicjalizacji i ustawienia jest osadzona w useEffect, który jest uruchamiany przy montowaniu komponentu. To tutaj tworzony jest faktyczny obiekt Canvas oraz przypisywane są mu ustawienia i obiekty.
