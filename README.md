@@ -311,3 +311,93 @@ Opis:
 Funkcjonalność:
 
 Komponent Editor odpowiada za montowanie Canvas w DOM i jego inicjalizację za pomocą hooka useEditor. Cała logika inicjalizacji i ustawienia jest osadzona w useEffect, który jest uruchamiany przy montowaniu komponentu. To tutaj tworzony jest faktyczny obiekt Canvas oraz przypisywane są mu ustawienia i obiekty.
+
+## Responsive Canvas
+Automatyczne dostosowanie rozmiaru Canvas i lepsze zarządzanie stanem poprzez React
+Zmiany w pliku `use-editors.ts`
+
+### Stan canvas i container:
+
+```
+const [canvas, setCanvas] = useState<fabric.Canvas | null>(null);
+const [container, setContainer] = useState<HTMLDivElement | null>(null);
+
+```
+Dodano stany do przechowywania referencji do Canvas oraz kontenera HTML. Te stany są niezbędne do monitorowania i aktualizacji Canvas oraz kontenera w innych częściach aplikacji. Dzięki temu różne komponenty mogą uzyskać dostęp do tych obiektów i manipulować nimi.
+
+### Użycie hooka `useAutoResize`:
+```
+useAutoResize({
+  canvas,
+  container,
+});
+```
+Import i użycie nowego hooka useAutoResize, który odpowiada za automatyczne dostosowywanie rozmiaru Canvas do rozmiaru kontenera. Dzięki temu Canvas dynamicznie zmienia swój rozmiar, gdy zmienia się rozmiar okna przeglądarki lub kontenera.
+### Inicjalizacja stanu `canvas` i `container` w `init`:
+```
+setCanvas(initialCanvas);
+setContainer(initialContainer);
+```
+Po zainicjowaniu Canvas i kontenera w funkcji `init`, wartości te są zapisane w stanach poprzez `setCanvas` i `setContainer`. To umożliwia ich późniejsze użycie w innych funkcjach, np. w hooku `useAutoResize`.
+
+Korzyści:
+
+* Dynamiczna zmiana rozmiaru Canvas: Wprowadzenie stanu dla `canvas` i `container` oraz hooka `useAutoResize` pozwala na automatyczne dostosowanie rozmiaru Canvas do kontenera, co poprawia responsywność aplikacji. Niezależnie od tego, jak użytkownik zmieni rozmiar okna przeglądarki, Canvas zostanie odpowiednio przeskalowany.
+
+Nowy plik use-auto-resize.ts
+### Funkcja autoZoom:
+```
+const autoZoom = useCallback(() => {
+  if (!canvas || !container) return;
+  const width = container.offsetWidth;
+  const height = container.offsetHeight;
+
+  canvas.setWidth(width);
+  canvas.setHeight(height);
+
+  const center = canvas.getCenter();
+  const zoomRatio = 0.85;
+  const localWorkspace = canvas.getObjects().find((object) => object.name === "clip");
+
+  const scale = fabric.util.findScaleToFit(localWorkspace, {
+    width: width,
+    height: height,
+  });
+
+  const zoom = zoomRatio * scale;
+
+  canvas.setViewportTransform(fabric.iMatrix.concat());
+  canvas.zoomToPoint(new fabric.Point(center.left, center.top), zoom);
+}, [canvas, container]);
+```
+Funkcja `autoZoom` odpowiada za dynamiczne dostosowanie rozmiaru i skalowanie obiektów na Canvas. Przelicza szerokość i wysokość kontenera, dopasowuje rozmiar Canvas oraz przeskalowuje wszystkie obiekty, tak aby mieściły się na Canvas.
+
+- Przeliczenie skali: `fabric.util.findScaleToFit` oblicza odpowiednią skalę, aby obiekty na Canvas mieściły się w nowym rozmiarze Canvas.
+- Centrowanie obiektów: Widok Canvas jest dostosowywany tak, aby obiekty były wycentrowane na podstawie rozmiaru kontenera i skalowania.
+### Obserwator zmian rozmiaru (`ResizeObserver`):
+```
+useEffect(() => {
+  let resizeObserver: ResizeObserver | null = null;
+
+  if (canvas && container) {
+    resizeObserver = new ResizeObserver(() => {
+      autoZoom();
+    });
+
+    resizeObserver.observe(container);
+  }
+
+  return () => {
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+    }
+  };
+}, [canvas, container, autoZoom]);
+
+```
+`ResizeObserver` monitoruje zmiany rozmiaru kontenera i automatycznie wywołuje funkcję `autoZoom`, gdy kontener zmienia rozmiar. To sprawia, że Canvas jest responsywny i dostosowuje się do zmian w rozmiarze okna przeglądarki.
+
+Korzyści:
+
+* Responsywność Canvas: Funkcja autoZoom oraz ResizeObserver sprawiają, że Canvas i jego obiekty są automatycznie skalowane w odpowiedzi na zmiany rozmiaru kontenera. Dzięki temu użytkownik nie musi ręcznie dostosowywać rozmiaru Canvas.
+* Optymalne skalowanie obiektów: Skala jest automatycznie obliczana, a obiekty są dopasowywane do dostępnej przestrzeni. Dzięki temu nie ma potrzeby manualnej interwencji w celu dopasowania obiektów.
